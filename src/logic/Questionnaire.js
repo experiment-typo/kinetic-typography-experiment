@@ -69,7 +69,7 @@ export function renderQuestionnaire(log) {
           <label style="display:block;margin:10px 0;">
             <input type="radio" name="q${idx}" id="${id}" value="${opt.label}">
             ${opt.label}<br>
-            <video src="public/videos/${opt.video}" width="300" muted autoplay loop style="margin-top:5px;border-radius:10px;"></video>
+            <video src="public/videos/${opt.video}" width="300" muted autoplay loop style="margin-top:25px;border-radius:10px;padding:15px;"></video>
           </label>
         `;
       });
