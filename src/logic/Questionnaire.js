@@ -78,6 +78,20 @@ export function renderQuestionnaire(log) {
     form.appendChild(qDiv);
   });
 
+  async function saveResultsToGoogle(data) {
+    try {
+      await fetch('https://script.google.com/macros/s/AKfycbwPRtNiWO4xUVpu6fbNj8begQvJtHKXDOUUcBoqSGGxclKV86MAZk2ywASKyJHUNFRo/exec', {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      console.log('Data sent to Google Sheets');
+    } catch (err) {
+      console.error('Error sending data to Google Sheets:', err);
+    }
+  }
+
   document.getElementById('submitBtn').addEventListener('click', () => {
     finalQuestions.forEach((q, idx) => {
       let answer = "";
@@ -118,6 +132,12 @@ export function renderQuestionnaire(log) {
     a.href = url;
     a.download = `results_${Date.now()}.json`;
     a.click();
+
+    saveResultsToGoogle({
+  framework: localStorage.getItem('selectedFramework'),
+  participant_id: Date.now(),
+  results: fullData // replace with your variable
+});
 
     app.innerHTML = "<h2>Thank you for participating!</h2><p>Your results have been saved.</p>";
   });
