@@ -9,7 +9,7 @@ export function runTrial(index, trials, log) {
     return;
   }
 
-  // Break screen after every 4 trials
+  // Break screen after every 4 trials (before the next one starts)
   if (index > 0 && index % 4 === 0) {
     app.innerHTML = `
       <h2>Would you like a break?</h2>
@@ -17,25 +17,31 @@ export function runTrial(index, trials, log) {
       <button id='breakNo'>No, continue</button>
     `;
 
-    const start = Date.now();
+    const breakStart = Date.now();
 
     document.getElementById("breakYes").addEventListener("click", () => {
       app.innerHTML = `
-        <h2>Take your time. Click when you're ready to continue.</h2>
+        <h2>Take your time.</h2>
+        <p>Click when you're ready to continue.</p>
         <button id='readyBtn'>I'm Ready</button>
       `;
       document.getElementById("readyBtn").addEventListener("click", () => {
-        const breakDuration = (Date.now() - start) / 1000;
-        runTrial(index + 1, trials, [...log, {
-          trialId: "BREAK",
-          breakDuration,
-          timestamp: new Date().toISOString()
-        }]);
+        const breakDuration = (Date.now() - breakStart) / 1000;
+        const updatedLog = [
+          ...log,
+          { trialId: "BREAK", breakDuration, timestamp: new Date().toISOString() }
+        ];
+        runTrial(index, trials, updatedLog); // Continue to the next *unplayed* trial
       });
     });
 
     document.getElementById("breakNo").addEventListener("click", () => {
-      runTrial(index + 1, trials, log);
+      const breakDuration = (Date.now() - breakStart) / 1000;
+      const updatedLog = [
+        ...log,
+        { trialId: "BREAK_SKIPPED", breakDuration, timestamp: new Date().toISOString() }
+      ];
+      runTrial(index, trials, updatedLog);
     });
 
     return;
@@ -64,14 +70,17 @@ function showMCQ(trial, index, trials, log) {
       const userAnswer = btn.innerText;
       const correct = userAnswer === trial.correctAnswer;
       const timestamp = new Date().toISOString();
-      runTrial(index + 1, trials, [...log, {
+
+      const newEntry = {
         trialId: trial.id,
         correctAnswer: trial.correctAnswer,
         userAnswer,
         correct,
         question: trial.questionText,
         timestamp
-      }]);
+      };
+
+      runTrial(index + 1, trials, [...log, newEntry]);
     });
   });
 }

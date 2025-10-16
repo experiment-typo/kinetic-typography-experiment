@@ -54,7 +54,7 @@ export const finalQuestions = [
   {
     type: "slider",
     text: "Compared to static text, did you think that the movement hold your attention better?",
-    labels: ["Not at all", "A little", "Neutral", "Quite a bit", "Much more"]
+    labels: ["Not at all", "Somewhat less", "Neutral", "Somewhat more", "Much more"]
   },
   {
     type: "slider",

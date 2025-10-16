@@ -4,6 +4,10 @@ export function renderQuestionnaire(log) {
   const app = document.getElementById('app');
   let responses = [];
 
+  // ✅ Separate breaks from trials
+  const breaks = log.filter(entry => entry.trialId === "BREAK" || entry.trialId === "BREAK_SKIPPED");
+  const trials = log.filter(entry => entry.trialId !== "BREAK" && entry.trialId !== "BREAK_SKIPPED");
+
   app.innerHTML = `
     <div class="left-align">
       <h2>Final Questionnaire</h2>
@@ -78,6 +82,7 @@ export function renderQuestionnaire(log) {
     form.appendChild(qDiv);
   });
 
+  // ✅ Sends data to Google Sheets
   async function saveResultsToGoogle(data) {
     try {
       await fetch('https://script.google.com/macros/s/AKfycbwPRtNiWO4xUVpu6fbNj8begQvJtHKXDOUUcBoqSGGxclKV86MAZk2ywASKyJHUNFRo/exec', {
@@ -119,13 +124,16 @@ export function renderQuestionnaire(log) {
       responses.push({ question: q.text, answer });
     });
 
+    // ✅ NEW: structured JSON
     const fullData = {
       timestamp: new Date().toISOString(),
       framework: localStorage.getItem("selectedFramework"),
-      trials: log,
+      trials,
+      breaks,
       questionnaire: responses
     };
 
+    // ✅ Still save locally as a file
     const blob = new Blob([JSON.stringify(fullData, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -133,11 +141,12 @@ export function renderQuestionnaire(log) {
     a.download = `results_${Date.now()}.json`;
     a.click();
 
+    // ✅ Also send to Google Sheets
     saveResultsToGoogle({
-  framework: localStorage.getItem('selectedFramework'),
-  participant_id: Date.now(),
-  results: fullData // replace with your variable
-});
+      framework: localStorage.getItem('selectedFramework'),
+      participant_id: Date.now(),
+      results: fullData
+    });
 
     app.innerHTML = "<h2>Thank you for participating!</h2><p>Your results have been saved.</p>";
   });
