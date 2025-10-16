@@ -1,105 +1,54 @@
 import { renderQuestionnaire } from './Questionnaire.js';
 
-/**
- * Run a single trial by index.
- * - trials: array of trial objects [{ id, video, questionText, choices, correctAnswer, ... }]
- * - log: accumulated results
- * - postBreak: internal flag so we only show the break screen once per block
- */
-export function runTrial(index, trials, log, postBreak = false) {
+export function runTrial(index, trials, log) {
   const app = document.getElementById('app');
 
-  // End of trials → launch questionnaire
+  // If we’ve shown all trials, go to questionnaire
   if (index >= trials.length) {
     renderQuestionnaire(log);
     return;
   }
 
-  // Break screen BEFORE the next block (every 4 trials), shown only once per block
-  if (index > 0 && index % 4 === 0 && !postBreak) {
-    app.innerHTML = `
-      <h2>Would you like a break?</h2>
-      <button id='breakYes'>Yes</button>
-      <button id='breakNo'>No, continue</button>
-    `;
-
-    const breakStart = Date.now();
-
-    // YES: show ready screen, then continue same index (no skip), and log break
-    document.getElementById("breakYes").addEventListener("click", () => {
-      app.innerHTML = `
-        <h2>Take your time.</h2>
-        <p>Click when you're ready to continue.</p>
-        <button id='readyBtn'>I'm Ready</button>
-      `;
-      document.getElementById("readyBtn").addEventListener("click", () => {
-        const breakDuration = (Date.now() - breakStart) / 1000;
-        const updatedLog = [
-          ...log,
-          { trialId: "BREAK", breakDuration, timestamp: new Date().toISOString() }
-        ];
-        // Continue to the same unplayed trial, mark postBreak=true so the break won't reappear
-        runTrial(index, trials, updatedLog, true);
-      });
-    });
-
-    // NO: continue to same index (no skip), still log a minimal break record
-    document.getElementById("breakNo").addEventListener("click", () => {
-      const breakDuration = (Date.now() - breakStart) / 1000; // tiny duration
-      const updatedLog = [
-        ...log,
-        { trialId: "BREAK_SKIPPED", breakDuration, timestamp: new Date().toISOString() }
-      ];
-      runTrial(index, trials, updatedLog, true);
-    });
-
-    return;
-  }
-
-  // Normal trial
   const trial = trials[index];
   if (!trial) {
-    // Defensive: if something is undefined, move on
-    runTrial(index + 1, trials, log, false);
+    // Defensive: if undefined, advance
+    runTrial(index + 1, trials, log);
     return;
   }
 
-  // Render video with autoplay-safe attributes
+  // Render the stimulus video (autoplay-safe)
   app.innerHTML = `
     <video id="stimulusVideo"
            src="public/videos/${trial.video}"
            autoplay
            muted
            playsinline
-           style="max-width: 100%; display: block;">
+           style="max-width:100%;display:block;border-radius:12px;">
     </video>
   `;
 
   const video = document.getElementById('stimulusVideo');
 
-  // Ensure autoplay starts in modern browsers
-  try { video.muted = true; } catch (_) {}
+  // Try to ensure playback in modern browsers
+  try { video.muted = true; } catch(_) {}
   try {
     const p = video.play();
     if (p && typeof p.then === 'function') {
       p.catch(() => {
-        // If autoplay is blocked, show a tap-to-start overlay
+        // Autoplay blocked → ask for tap then retry this same trial
         app.innerHTML = `
-          <div>
-            <p>Click to start the video</p>
-            <button id="tapToStart">Start</button>
-          </div>
+          <h2>Tap to start the video</h2>
+          <button id="tapToStart">Start</button>
         `;
         document.getElementById('tapToStart').addEventListener('click', () => {
-          runTrial(index, trials, log, postBreak);
+          runTrial(index, trials, log);
         });
       });
     }
-  } catch (_) {
-    // If play() throws, we’ll rely on fallback timer below
+  } catch(_) {
+    // If play() threw, proceed to fallback timer below
   }
 
-  // Handler to proceed to MCQ (clears fallback)
   let advanced = false;
   const proceed = () => {
     if (advanced) return;
@@ -111,11 +60,11 @@ export function runTrial(index, trials, log, postBreak = false) {
   // Primary progression
   video.onended = proceed;
 
-  // Fallback progression (in case onended never fires due to load/policy)
+  // Fallback progression if onended never fires (network/policy)
   const FALLBACK_MS = 6500; // adjust if your stimuli are longer
   const fallbackTimer = setTimeout(proceed, FALLBACK_MS);
 
-  // If a hard error on video, proceed anyway
+  // Also don’t get stuck on error
   video.onerror = proceed;
 }
 
@@ -127,7 +76,6 @@ function showMCQ(trial, index, trials, log) {
     ${trial.choices.map(choice => `<button class="choiceBtn">${choice}</button>`).join('<br>')}
   `;
 
-  // Bind once per render
   document.querySelectorAll('.choiceBtn').forEach(btn => {
     btn.addEventListener('click', () => {
       const userAnswer = btn.innerText;
@@ -143,8 +91,58 @@ function showMCQ(trial, index, trials, log) {
         timestamp
       };
 
-      // Advance to next trial; reset postBreak to false so the next block break can show
-      runTrial(index + 1, trials, [...log, newEntry], false);
+      const nextIndex = index + 1;
+      const newLog = [...log, newEntry];
+
+      // ✅ Show a break AFTER every 4th trial (i.e., after trials 4, 8, 12),
+      // as long as there are more trials ahead.
+      const completedCount = nextIndex; // number of trials completed so far
+      const shouldShowBreak = (completedCount % 4 === 0) && (nextIndex < trials.length);
+
+      if (shouldShowBreak) {
+        renderBreakScreen(nextIndex, trials, newLog);
+      } else {
+        runTrial(nextIndex, trials, newLog);
+      }
     }, { once: true });
   });
+}
+
+function renderBreakScreen(nextIndex, trials, log) {
+  const app = document.getElementById('app');
+
+  app.innerHTML = `
+    <h2>Would you like a break?</h2>
+    <button id='breakYes'>Yes</button>
+    <button id='breakNo'>No, continue</button>
+  `;
+
+  const breakStart = Date.now();
+
+  // YES → show ready screen → log BREAK → continue to nextIndex
+  document.getElementById("breakYes").addEventListener("click", () => {
+    app.innerHTML = `
+      <h2>Take your time.</h2>
+      <p>Click when you're ready to continue.</p>
+      <button id='readyBtn'>I'm Ready</button>
+    `;
+    document.getElementById("readyBtn").addEventListener("click", () => {
+      const breakDuration = (Date.now() - breakStart) / 1000;
+      const updatedLog = [
+        ...log,
+        { trialId: "BREAK", breakDuration, timestamp: new Date().toISOString() }
+      ];
+      runTrial(nextIndex, trials, updatedLog);
+    }, { once: true });
+  }, { once: true });
+
+  // NO → log BREAK_SKIPPED (tiny duration) → continue to nextIndex
+  document.getElementById("breakNo").addEventListener("click", () => {
+    const breakDuration = (Date.now() - breakStart) / 1000;
+    const updatedLog = [
+      ...log,
+      { trialId: "BREAK_SKIPPED", breakDuration, timestamp: new Date().toISOString() }
+    ];
+    runTrial(nextIndex, trials, updatedLog);
+  }, { once: true });
 }
